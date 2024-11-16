@@ -4,7 +4,10 @@ output: github_document
 ---
 
 ```{r}
-
+library(broom)
+library(tidyverse)
+library(ggplot2)
+set.seed(1)
 ```
 
 
@@ -27,7 +30,6 @@ dup_birthday = function(n){
 
 Run previous function 10000 times for each group size between 2 and 50
 ```{r}
-set.seed(1)
 
 simulations = 10000
 
@@ -48,7 +50,89 @@ prob
 ```
 Make a plot showing the probability with different group size.
 ```{r}
-plot(prob,xlab="Group Size",ylab="Probability",)
+plot(prob, xlab="Group Size", ylab="Probability", main = "The Probability of People in Certain Group Size Sharing Same Birthday")
+```
+## Problem 2
+
+The function to calculate the estimate and p_value for given mu
+```{r}
+
+n = 30
+sigma = 5
+alpha = 0.05
+sim = 5000
+mu_set = 0:6
+
+sim_t_test = function(mu, n=30, sigma=5, alpha=0.05) {
+  
+  sim_data = tibble(
+    x = rnorm(n, mean = mu, sd = sigma)
+  )
+  
+  t_test = t.test(sim_data$x, mu=0)
+  
+  t_test = tidy(t_test)
+  
+
+  tibble(estimate = t_test$estimate, p_value = t_test$p.value)
+    
+}
+
+
 ```
 
+```{r}
+sim_t_test(mu=6)
+```
 
+Complete 5000 simulations for mu value from 0 to 6. 
+```{r}
+t_test_mu = map(mu_set, ~{
+  estimates = numeric(sim)
+  p_values = numeric(sim)
+  
+  for(i in 1:sim){
+    sim_x = sim_t_test(.x,n,sigma,alpha)
+    estimates[i] = sim_x$estimate
+    p_values[i] = sim_x$p_value
+  }
+  
+  power = mean(p_values < alpha)
+  
+  rejected_estimate = mean(estimates[p_values<alpha])
+  
+  tibble(mu = .x, power = power,estimate = mean(estimates),rejected_estimate = rejected_estimate)
+})
+
+t_test_result = bind_rows(t_test_mu)
+
+```
+
+```{r}
+t_test_result
+```
+
+Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of mu on the x axis.
+```{r}
+ggplot(t_test_result, aes(x = mu, y = power))+
+  geom_point()+
+  geom_line()+
+  labs(title = "Power of the Test Under Different Mean",
+       x = "True Value of Mean",
+       y = "The Power of the Test")
+```
+From the plot, we can get that with the increase of population mean, the power of the test(the proportion of times the null of mu=0 was rejected) increasing and when the mu = 6, the value of power reaches 1. 
+
+Make a plot showing the average estimate of mu on the y axis and the true value of mu on the x axis.
+```{r}
+ggplot(t_test_result, aes(x = mu))+
+  geom_point(aes(y=estimate),color = "red")+
+  geom_line(aes(y=estimate),color = "red",linetype = "dashed")+
+  geom_point(aes(y=rejected_estimate),color = "blue")+
+  geom_line(aes(y=rejected_estimate),color = "blue",linetype="dashed")+
+  labs(title = "Different between average estimate of mu(red) and that only for null rejected(blue)",
+       x = "True Value of Mean",
+       y = "Average estimate of mu Under Different Conditions",
+      )
+```
+From the plot, we can get that the average estimate of mu only in samples for which the null was rejected is larger than average estimate of mu when mu is 1 or 2 or 3, and they are similar when mu is 0 4 or 5 or 6. It's reasonable, connect with previous plot, when mu larger than 4, the power similar to 1. These two variables become same approximately. 

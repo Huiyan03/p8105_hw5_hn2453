@@ -7,6 +7,9 @@ output: github_document
 library(broom)
 library(tidyverse)
 library(ggplot2)
+library(readr)
+library(dplyr)
+library(purrr)
 set.seed(1)
 ```
 
@@ -81,9 +84,6 @@ sim_t_test = function(mu, n=30, sigma=5, alpha=0.05) {
 
 ```
 
-```{r}
-sim_t_test(mu=6)
-```
 
 Complete 5000 simulations for mu value from 0 to 6. 
 ```{r}
@@ -99,7 +99,7 @@ t_test_mu = map(mu_set, ~{
   
   power = mean(p_values < alpha)
   
-  rejected_estimate = mean(estimates[p_values<alpha])
+  rejected_estimate = mean(estimates[p_values < alpha])
   
   tibble(mu = .x, power = power,estimate = mean(estimates),rejected_estimate = rejected_estimate)
 })
@@ -130,9 +130,66 @@ ggplot(t_test_result, aes(x = mu))+
   geom_line(aes(y=estimate),color = "red",linetype = "dashed")+
   geom_point(aes(y=rejected_estimate),color = "blue")+
   geom_line(aes(y=rejected_estimate),color = "blue",linetype="dashed")+
-  labs(title = "Different between average estimate of mu(red) and that only for null rejected(blue)",
+  labs(title = "Different Between Average Estimate of Mu(Red) and That Only for Null Rejected(Blue)",
        x = "True Value of Mean",
        y = "Average estimate of mu Under Different Conditions",
       )
 ```
 From the plot, we can get that the average estimate of mu only in samples for which the null was rejected is larger than average estimate of mu when mu is 1 or 2 or 3, and they are similar when mu is 0 4 or 5 or 6. It's reasonable, connect with previous plot, when mu larger than 4, the power similar to 1. These two variables become same approximately. 
+
+## Problem 3
+
+The raw dataset have 12 variables and 52179 rows. Variables includes uid, reported_date, victim_last, victim_first, victim_race, victim_age, victim_sex, city, state, lat, lon, disposition.
+```{r}
+homicide = read_csv("data/homicide-data.csv") |>
+  janitor::clean_names()
+  
+```
+Create a city_state variable and then summarize within cities to obtain the total number of homicides and the number of unsolved homicides 
+```{r }
+homicide_1 = homicide |>
+  mutate(city_state = paste(city, state, sep = ", "))|>
+  group_by(city_state)|>
+  summarise(
+    total_homicide = n(),
+    unsolved_homicide = sum(disposition %in% c("Closed without arrest","Open/No arrest"))
+  )
+```
+
+For the city of Baltimore, MD, use the prop.test function to estimate the proportion of homicides that are unsolved
+```{r}
+homicide_Bal = homicide_1|>
+  filter(city_state=="Baltimore, MD")
+
+bal_prop_test = prop.test(homicide_Bal$unsolved_homicide,homicide_Bal$total_homicide)
+
+tidy_bal = tidy(bal_prop_test)
+
+tidy_bal
+```
+Thus, the estimated proportion is `r tidy_bal$estimate` and the confidence interval is [`r tidy_bal$conf.low`, `r tidy_bal$conf.high`]. 
+
+Run prop.test for each of the cities in your dataset, and extract both the proportion of unsolved homicides and the confidence interval for each.
+```{r warning=FALSE}
+homicide_prop = homicide_1 |>
+  mutate(
+    prop_test = map2(unsolved_homicide, total_homicide, ~prop.test(.x, .y)))|>
+  mutate(tidy_homicide = map(prop_test,tidy))|>
+  unnest(tidy_homicide)|>
+  select(city_state, estimate, conf.low, conf.high)|>
+  arrange(estimate)|>
+  filter(city_state != "Tulsa, AL")
+
+```
+Find the total_homicide of Tulsa, AL is 1, cannot use prop.test in this case. Thus, remove it from dataset. 
+
+Create a plot that shows the estimates and CIs for each city.
+```{r fig.height=10}
+ggplot(data = homicide_prop, aes(x = reorder(city_state,estimate), y= estimate))+
+  geom_point()+
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high))+
+  coord_flip()+
+  labs(x = "City",
+       y = "Proportion of Unsolved Homicides with CI")
+```
+

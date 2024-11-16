@@ -8,3 +8,47 @@ output: github_document
 ```
 
 
+## Problem 1
+Write the function to check whether there are duplicate birthdays in the group with fixed group size.
+```{r}
+group_size = 2:50
+
+birthdays = 1:365
+
+dup_birthday = function(n){
+  
+  assign_birthday = sample(birthdays, n, replace = TRUE)
+
+  return(anyDuplicated(assign_birthday)!=0)
+  
+}
+
+```
+
+Run previous function 10000 times for each group size between 2 and 50
+```{r}
+set.seed(1)
+
+simulations = 10000
+
+prob = array(2:50, dim = c(49))
+for(n in group_size){
+  count = 0
+for(i in 1:simulations){
+  if(dup_birthday(n)){
+    count = count + 1
+  }
+  
+}
+  prob[n-1] = count/simulations
+}
+
+prob
+
+```
+Make a plot showing the probability with different group size.
+```{r}
+plot(prob,xlab="Group Size",ylab="Probability",)
+```
+
+
